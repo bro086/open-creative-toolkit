@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#10111b">
+<title>Open Creative Toolkit</title>
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #10111b;
+  color: white;
+  font-family: Arial, sans-serif;
+}
+
+header {
+  padding: 20px;
+  background: #191b29;
+  border-bottom: 1px solid #303247;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 21px;
+}
+
+header p {
+  color: #a8abc0;
+  font-size: 13px;
+}
+
+main {
+  max-width: 850px;
+  margin: auto;
+  padding: 16px;
+}
+
+.panel {
+  background: #1b1d2c;
+  padding: 16px;
+  border-radius: 14px;
+  margin-bottom: 15px;
+}
+
+canvas {
+  width: 100%;
+  display: block;
+  background: #080a14;
+  border-radius: 12px;
+  touch-action: manipulation;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+button {
+  border: 0;
+  border-radius: 9px;
+  padding: 13px 17px;
+  background: #6657ee;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: #34364b;
+}
+
+button:disabled {
+  opacity: .5;
+}
+
+label {
+  display: block;
+  color: #c4c6d7;
+  font-size: 14px;
+  margin: 13px 0 7px;
+}
+
+input[type="range"] {
+  width: 100%;
+}
+
+input[type="color"] {
+  width: 55px;
+  height: 38px;
+  border: 0;
+  background: none;
+}
+
+.status {
+  color: #a9aaca;
+  font-size: 13px;
+  margin-top: 12px;
+}
+
+footer {
+  color: #777b91;
+  text-align: center;
+  padding: 20px;
+  font-size: 12px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>Open Creative Toolkit</h1>
+  <p>Free 2D Animation Studio · Version 1.0</p>
+</header>
+
+<main>
+
+  <section class="panel">
+    <h3>Animation Canvas</h3>
+    <canvas id="canvas" width="800" height="450"></canvas>
+
+    <div class="controls">
+      <button id="play">▶ Play</button>
+      <button id="reset" class="secondary">↻ Reset</button>
+      <button id="record" class="secondary">● Record</button>
+    </div>
+
+    <div class="status" id="status">
+      Ready · Animation paused
+    </div>
+  </section>
+
+  <section class="panel">
+    <h3>Animation Settings</h3>
+
+    <label for="color">Object colour</label>
+    <input id="color" type="color" value="#8b72ff">
+
+    <label for="speed">
+      Animation speed: <span id="speedValue">1.0x</span>
+    </label>
+    <input id="speed" type="range"
+      min="0.2" max="3" step="0.1" value="1">
+
+    <label for="size">
+      Object size: <span id="sizeValue">35</span>
+    </label>
+    <input id="size" type="range"
+      min="15" max="75" value="35">
+  </section>
+
+  <section class="panel">
+    <h3>About this project</h3>
+    <p>
+      An open-source experiment in accessible
+      browser-based 2D animation.
+    </p>
+    <p>
+      Built with HTML, CSS and JavaScript.
+      No external libraries or paid APIs required.
+    </p>
+  </section>
+
+</main>
+
+<footer>
+  Open Creative Toolkit · Open-source project
+</footer>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+const playButton = document.getElementById("play");
+const resetButton = document.getElementById("reset");
+const recordButton = document.getElementById("record");
+const statusText = document.getElementById("status");
+
+const colorInput = document.getElementById("color");
+const speedInput = document.getElementById("speed");
+const sizeInput = document.getElementById("size");
+
+let playing = false;
+let recording = false;
+let recorder = null;
+let chunks = [];
+
+let x = 120;
+let y = 220;
+let vx = 3;
+let vy = 0;
+let frame = 0;
+let speed = 1;
+let radius = 35;
+let lastTime = 0;
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Background
+  ctx.fillStyle = "#080a14";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Grid
+  ctx.strokeStyle = "#202337";
+  ctx.lineWidth = 1;
+
+  for (let i = 0; i < canvas.width; i += 50) {
+    ctx.beginPath();
+    ctx.moveTo(i, 0);
+    ctx.lineTo(i, canvas.height);
+    ctx.stroke();
+  }
+
+  for (let i = 0; i < canvas.height; i += 50) {
+    ctx.beginPath();
+    ctx.moveTo(0, i);
+    ctx.lineTo(canvas.width, i);
+    ctx.stroke();
+  }
+
+  // Title
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 22px Arial";
+  ctx.fillText("MY FIRST ANIMATION", 25, 42);
+
+  // Ball shadow
+  ctx.beginPath();
+  ctx.ellipse(
+    x, 395, radius * 1.2, 9, 0, 0, Math.PI * 2
+  );
+  ctx.fillStyle = "rgba(0,0,0,0.4)";
+  ctx.fill();
+
+  // Ball gradient
+  const gradient = ctx.createRadialGradient(
+    x - radius / 3,
+    y - radius / 3,
+    2,
+    x,
+    y,
+    radius
+  );
+
+  gradient.addColorStop(0, "#ffffff");
+  gradient.addColorStop(0.2, colorInput.value);
+  gradient.addColorStop(1, "#292052");
+
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fillStyle = gradient;
+  ctx.fill();
+
+  // Highlight
+  ctx.beginPath();
+  ctx.arc(
+    x - radius / 3,
+    y - radius / 3,
+    radius / 5,
+    0,
+    Math.PI * 2
+  );
+  ctx.fillStyle = "rgba(255,255,255,0.7)";
+  ctx.fill();
+
+  // Ground
+  ctx.beginPath();
+  ctx.moveTo(0, 405);
+  ctx.lineTo(800, 405);
+  ctx.strokeStyle = "#77728f";
+  ctx.stroke();
+}
+
+function update(delta) {
+  const step = Math.min(delta / 16.67, 2) * speed;
+
+  x += vx * step;
+  y += vy * step;
+
+  vy += 0.22 * step;
+
+  if (y + radius > 405) {
+    y = 405 - radius;
+    vy = -Math.abs(vy) * 0.88;
+
+    if (Math.abs(vy) < 1) {
+      vy = -7;
+    }
+  }
+
+  if (x + radius > 800 || x - radius < 0) {
+    vx *= -1;
+    x = Math.max(radius, Math.min(800-radius, x));
+  }
+}
+
+function loop(timestamp) {
+  const delta = lastTime ? timestamp - lastTime : 16.67;
+  lastTime = timestamp;
+
+  if (playing) {
+    update(delta);
+  }
+
+  draw();
+  requestAnimationFrame(loop);
+}
+
+playButton.addEventListener("click", () => {
+  playing = !playing;
+
+  playButton.textContent =
+    playing ? "Ⅱ Pause" : "▶ Play";
+
+  statusText.textContent =
+    playing ? "Animation running" : "Animation paused";
+});
+
+resetButton.addEventListener("click", () => {
+  x = 120;
+  y = 220;
+  vx = 3;
+  vy = 0;
+
+  playing = false;
+  playButton.textContent = "▶ Play";
+  statusText.textContent = "Animation reset";
+
+  draw();
+});
+
+colorInput.addEventListener("input", draw);
+
+speedInput.addEventListener("input", () => {
+  speed = Number(speedInput.value);
+
+  document.getElementById("speedValue").textContent =
+    speed.toFixed(1) + "x";
+});
+
+sizeInput.addEventListener("input", () => {
+  radius = Number(sizeInput.value);
+
+  document.getElementById("sizeValue").textContent =
+    radius;
+
+  draw();
+});
+
+// Record animation
+recordButton.addEventListener("click", () => {
+  if (recording) {
+    recorder.stop();
+    return;
+  }
+
+  if (!canvas.captureStream || !window.MediaRecorder) {
+    statusText.textContent =
+      "Video recording is not supported in this browser.";
+    return;
+  }
+
+  try {
+    chunks = [];
+
+    const stream = canvas.captureStream(30);
+
+    const mimeType =
+      MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
+        ? "video/webm;codecs=vp9"
+        : "video/webm";
+
+    recorder = new MediaRecorder(stream, {mimeType});
+
+    recorder.ondataavailable = event => {
+      if (event.data.size > 0) {
+        chunks.push(event.data);
+      }
+    };
+
+    recorder.onstop = () => {
+      const blob = new Blob(chunks, {type: "video/webm"});
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "my-animation.webm";
+      link.click();
+
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      statusText.textContent = "Recording saved.";
+      recordButton.textContent = "● Record";
+      recording = false;
+
+      stream.getTracks().forEach(track => track.stop());
+    };
+
+    recorder.start();
+
+    recording = true;
+    playing = true;
+    playButton.textContent = "Ⅱ Pause";
+    recordButton.textContent = "■ Stop recording";
+    statusText.textContent = "Recording animation...";
+  } catch (error) {
+    statusText.textContent =
+      "Recording failed: " + error.message;
+  }
+});
+
+draw();
+requestAnimationFrame(loop);
+</script>
+
+</body>
+</html>
+
